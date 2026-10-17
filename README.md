@@ -33,6 +33,8 @@ Korgool is a **zero-trace, offline-first SMS reporting system**.
 ## Why Open Source?
 We built this as public infrastructure. Any crisis center in Kyrgyzstan can download this code, put it on a $50 laptop, and start saving lives tomorrow. We believe safety should not be proprietary.
 
+
+
 # 🛡️ Korgool (Коргоол)
 **Инфраструктура экстренного реагирования через «тихие» SMS для Кыргызстана**
 
