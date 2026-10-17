@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Korgool — Register a Woman</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <div>
+            <h1>🛡️ Korgool</h1>
+            <p class="subtitle">NGO Registration Portal</p>
+        </div>
+        <a href="/" class="action-link primary">← Back to Dashboard</a>
+    </header>
+
+    <div class="simulator" style="max-width: 600px; margin: 0 auto;">
+        <h2>Register a Woman</h2>
+        <p>Fill this out with her, in person. She chooses the codeword herself.</p>
+
+        <div class="form-group">
+            <label>Codeword (one word, ALL CAPS)</label>
+            <input type="text" id="codeword" placeholder="РОМАШКА" />
+        </div>
+        <div class="form-group">
+            <label>Her Name</label>
+            <input type="text" id="name" placeholder="Айзада, 34 года" />
+        </div>
+        <div class="form-group">
+            <label>Address</label>
+            <input type="text" id="address" placeholder="ул. Токтогула, 125, кв. 12" />
+        </div>
+        <div class="form-group">
+            <label>Disability (if any)</label>
+            <input type="text" id="disability" placeholder="Моторная инвалидность" />
+        </div>
+        <div class="form-group">
+            <label>Safe Contact</label>
+            <input type="text" id="safe_contact" placeholder="+996 555 123 456 (сестра)" />
+        </div>
+        <div class="form-group">
+            <label>Registered By</label>
+            <input type="text" id="registered_by" placeholder="Nazik Kyz" />
+        </div>
+
+        <button class="submit-btn" onclick="registerWoman()">Register Woman</button>
+        <p id="result" style="margin-top: 12px; font-size: 13px; font-family: 'JetBrains Mono', monospace;"></p>
+    </div>
+
+    <h2 class="section-title" style="max-width: 600px; margin: 32px auto 12px auto;">Registered Database</h2>
+    <div class="case-list" id="registryList" style="max-width: 600px; margin: 0 auto;">
+        <p class="empty-state">Loading registry...</p>
+    </div>
+
+    <script>
+        async function registerWoman() {
+            const data = {
+                codeword: document.getElementById('codeword').value.trim(),
+                name: document.getElementById('name').value.trim(),
+                address: document.getElementById('address').value.trim(),
+                disability: document.getElementById('disability').value.trim(),
+                safe_contact: document.getElementById('safe_contact').value.trim(),
+                registered_by: document.getElementById('registered_by').value.trim()
+            };
+
+            const resultEl = document.getElementById('result');
+
+            if (!data.codeword || !data.name) {
+                resultEl.textContent = '❌ Codeword and Name are required.';
+                resultEl.style.color = 'var(--urgent)';
+                return;
+            }
+
+            const res = await fetch('/api/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+
+            const result = await res.json();
+            if (res.ok) {
+                resultEl.textContent = '✅ Registered: ' + result.codeword;
+                resultEl.style.color = 'var(--low)';
+                document.querySelectorAll('.form-group input').forEach(i => i.value = '');
+                fetchRegistry();
+            } else {
+                resultEl.textContent = '❌ ' + (result.error || 'Failed');
+                resultEl.style.color = 'var(--urgent)';
+            }
+        }
+
+        async function fetchRegistry() {
+            const res = await fetch('/api/registry');
+            const women = await res.json();
+            const list = document.getElementById('registryList');
+            if (women.length === 0) {
+                list.innerHTML = '<p class="empty-state">No women registered yet.</p>';
+                return;
+            }
+            list.innerHTML = women.map(w => `
+                <div class="case low">
+                    <div class="case-content">
+                        <div class="case-header">
+                            <span class="severity-badge low">🆔 ${w.codeword}</span>
+                            <span class="timestamp">${w.registered_at}</span>
+                        </div>
+                        <p class="case-message"><strong>${w.name}</strong></p>
+                        <p class="registry-meta">
+                            📍 ${w.address || '—'} &nbsp;|&nbsp;
+                            ♿ ${w.disability || '—'} &nbsp;|&nbsp;
+                            📞 ${w.safe_contact || '—'} &nbsp;|&nbsp;
+                            🏢 ${w.registered_by || '—'}
+                        </p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        fetchRegistry();
+    </script>
+</body>
+</html>

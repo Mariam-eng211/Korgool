@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Korgool — Operator Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css?v=3">
+    <script>
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+</head>
+<body>
+    <header>
+        <div class="header-brand">
+            <h1>🛡️ Korgool</h1>
+            <p class="subtitle">Silent SMS Crisis Response</p>
+        </div>
+        <div class="header-actions">
+            <button id="themeToggle" class="btn-secondary" onclick="toggleTheme()"> Dark Mode</button>
+            <a href="/register" class="btn-secondary">Register Woman</a>
+            <a href="/api/backup" class="btn-secondary">Backup DB</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="stats-grid">
+            <div class="stat-card urgent"><div class="stat-value" id="statUrgent">0</div><div class="stat-label">Urgent Cases</div></div>
+            <div class="stat-card high"><div class="stat-value" id="statHigh">0</div><div class="stat-label">High Priority</div></div>
+            <div class="stat-card medium"><div class="stat-value" id="statMedium">0</div><div class="stat-label">Medium</div></div>
+            <div class="stat-card low"><div class="stat-value" id="statLow">0</div><div class="stat-label">Low Priority</div></div>
+        </div>
+
+        <div class="panel simulator-panel">
+            <div class="panel-header">
+                <h2> SMS Simulator (Demo Mode)</h2>
+                <p>Type a message as if a survivor sent it via SMS. Use an ALL-CAPS word to simulate a pre-registered codeword.</p>
+            </div>
+            <div class="sim-input-group">
+                <input type="text" id="simMessage" placeholder="e.g., Он меня ударил. ПОЗВОНИ" />
+                <button class="btn-primary" onclick="sendSimulatedSMS()">Send SMS</button>
+            </div>
+            <div class="quick-tests">
+                <button onclick="quickTest('Он меня ударил. ПОЗВОНИ')">🔴 Urgent + Callback</button>
+                <button onclick="quickTest('Он следит за мной, не пускает')">🟠 High</button>
+                <button onclick="quickTest('Мне страшно и одиноко')">🟡 Medium</button>
+                <button onclick="quickTest('Я устала')">🟢 Low</button>
+            </div>
+        </div>
+
+        <div class="section-header"><h2>Active Incoming Cases</h2></div>
+        <div class="case-list" id="caseList"><div class="empty-state">No active cases. System is standing by.</div></div>
+
+        <div class="section-header" style="margin-top: 40px;"><h2>Registered Women Database</h2></div>
+        <div class="case-list" id="registryList"><div class="empty-state">Loading database...</div></div>
+    </main>
+
+    <script>
+        function updateThemeButton(theme) {
+            const btn = document.getElementById('themeToggle');
+            if(btn) btn.innerHTML = theme === 'dark' ? ' Light Mode' : ' Dark Mode';
+        }
+        function toggleTheme() {
+            const newTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeButton(newTheme);
+        }
+        updateThemeButton(localStorage.getItem('theme') || 'light');
+
+        fetch('/api/purge', {method: 'POST'});
+
+        async function fetchData() {
+            const caseRes = await fetch('/api/cases');
+            const cases = await caseRes.json();
+            renderCases(cases);
+            updateStats(cases);
+            const regRes = await fetch('/api/registry');
+            renderRegistry(await regRes.json());
+        }
+
+        function renderCases(cases) {
+            const list = document.getElementById('caseList');
+            if (cases.length === 0) { list.innerHTML = '<div class="empty-state">No active cases. System is standing by.</div>'; return; }
+            list.innerHTML = cases.map(c => {
+                const badges = [];
+                if (c.callback_requested) badges.push('<span class="badge badge-blue"> Callback Requested</span>');
+                if (c.registry_match) badges.push(`<span class="badge badge-purple clickable" onclick="showRegistry('${c.codeword}')"> Registered: ${c.codeword}</span>`);
+                const actions = [];
+                if (c.callback_requested && c.status !== 'resolved') actions.push(`<button class="btn-action btn-call" onclick="revealCallback(${c.id})"> Call</button>`);
+                actions.push(c.status === 'resolved' ? '<span class="resolved-text">✓ Resolved</span>' : `<button class="btn-action" onclick="resolveCase(${c.id})">Resolve</button>`);
+                return `<div class="case-card ${c.severity} ${c.status === 'resolved' ? 'resolved' : ''}">
+                    <div class="case-main">
+                        <div class="case-top"><span class="tag tag-${c.severity}">${c.severity.toUpperCase()}</span><span class="case-category">${c.category}</span><span class="case-time">${c.timestamp}</span></div>
+                        <div class="case-message">${c.message}</div>${badges.length ? '<div class="case-badges">' + badges.join('') + '</div>' : ''}
+                    </div><div class="case-side">${actions.join('')}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderRegistry(women) {
+            const list = document.getElementById('registryList');
+            if (women.length === 0) { list.innerHTML = '<div class="empty-state">No women registered.</div>'; return; }
+            list.innerHTML = women.map(w => `<div class="registry-card">
+                <div class="registry-top"><span class="badge badge-purple"> ${w.codeword}</span><span class="case-time">Registered: ${w.registered_at}</span></div>
+                <div class="registry-name">${w.name}</div>
+                <div class="registry-details"><span> ${w.address || '—'}</span><span> ${w.disability || '—'}</span><span> ${w.safe_contact || '—'}</span><span>🏢 ${w.registered_by || '—'}</span></div>
+            </div>`).join('');
+        }
+
+        function updateStats(cases) {
+            const counts = { urgent: 0, high: 0, medium: 0, low: 0 };
+            cases.forEach(c => { if (c.status !== 'resolved' && counts[c.severity] !== undefined) counts[c.severity]++; });
+            document.getElementById('statUrgent').textContent = counts.urgent;
+            document.getElementById('statHigh').textContent = counts.high;
+            document.getElementById('statMedium').textContent = counts.medium;
+            document.getElementById('statLow').textContent = counts.low;
+        }
+
+        async function sendSimulatedSMS() {
+            const input = document.getElementById('simMessage');
+            if (!input.value.trim()) return;
+            await fetch('/api/simulate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: input.value.trim()}) });
+            input.value = ''; fetchData();
+        }
+        function quickTest(msg) { document.getElementById('simMessage').value = msg; sendSimulatedSMS(); }
+        
+        async function revealCallback(id) {
+            const res = await fetch('/api/callback/' + id);
+            if (!res.ok) { alert('⏱ Callback expired (30 min limit).'); return; }
+            alert(' SECURE CALLBACK NUMBER\n\n' + (await res.json()).phone + '\n\n Call from a safe line.');
+        }
+        async function showRegistry(cw) {
+            const res = await fetch('/api/registry/lookup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({codeword: cw}) });
+            if (!res.ok) { alert('⏱ Not found.'); return; }
+            const w = await res.json();
+            alert(` PROFILE\n\nCodeword: ${w.codeword}\nName: ${w.name}\nAddress: ${w.address}\nDisability: ${w.disability}\nSafe Contact: ${w.safe_contact}\nBy: ${w.registered_by}`);
+        }
+        async function resolveCase(id) { await fetch('/api/resolve/' + id, {method: 'POST'}); fetchData(); }
+        document.getElementById('simMessage').addEventListener('keypress', e => { if (e.key === 'Enter') sendSimulatedSMS(); });
+
+        fetchData();
+        setInterval(fetchData, 3000);
+    </script>
+</body>
+</html>

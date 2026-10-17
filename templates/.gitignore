@@ -1,0 +1,6 @@
+korgool.db
+korgool.db-wal
+korgool.db-shm
+__pycache__/
+venv/
+.env
